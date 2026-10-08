@@ -1,0 +1,585 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cartella condivisa</title>
+<style>
+  :root {
+    --bg: #f6f5f1; --card: #ffffff; --text: #1d1c1a; --muted: #6b6860;
+    --line: #e2dfd6; --accent: #2456d6; --accent-text: #ffffff;
+    --ok: #1c7c45; --warn: #a15c00; --bad: #b3261e; --chip: #efede6;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #151514; --card: #1f1f1d; --text: #ecebe6; --muted: #a09d94;
+      --line: #33322e; --accent: #7ea2ff; --accent-text: #10172b;
+      --ok: #62c98a; --warn: #e2a64a; --bad: #ff8a80; --chip: #2a2926;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 820px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1 { font-size: 1.7rem; margin: 0 0 4px; letter-spacing: -0.01em; }
+  .sub { color: var(--muted); margin: 0 0 24px; }
+  section {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px; margin-bottom: 14px;
+  }
+  h2 { font-size: 1rem; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
+  .num {
+    width: 24px; height: 24px; border-radius: 50%; background: var(--chip);
+    display: inline-grid; place-items: center; font-size: .8rem; font-weight: 600;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  button {
+    font: inherit; padding: 9px 14px; border-radius: 8px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--chip); color: var(--text);
+  }
+  button.primary { background: var(--accent); color: var(--accent-text); border-color: transparent; font-weight: 600; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  input[type=text] {
+    font: inherit; padding: 9px 12px; border-radius: 8px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--text); min-width: 0; flex: 1 1 180px;
+    font-family: ui-monospace, Consolas, monospace; letter-spacing: .05em;
+  }
+  .hint { color: var(--muted); font-size: .88rem; margin: 8px 0 0; }
+  .code {
+    font: 600 1.25rem ui-monospace, Consolas, monospace; letter-spacing: .12em;
+    background: var(--chip); padding: 6px 12px; border-radius: 8px; user-select: all;
+  }
+  .status { display: inline-flex; align-items: center; gap: 8px; font-weight: 600; }
+  .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--muted); }
+  .dot.ok { background: var(--ok); } .dot.warn { background: var(--warn); } .dot.bad { background: var(--bad); }
+  .banner {
+    border: 1px solid var(--bad); color: var(--bad); border-radius: 10px;
+    padding: 12px 14px; margin-bottom: 14px; background: var(--card);
+  }
+  .list { max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; }
+  .item {
+    display: flex; justify-content: space-between; gap: 12px; padding: 7px 10px;
+    border-bottom: 1px solid var(--line); font-size: .9rem;
+  }
+  .item:last-child { border-bottom: 0; }
+  .item .p { overflow-wrap: anywhere; min-width: 0; }
+  .item .s { white-space: nowrap; color: var(--muted); }
+  .item .s.ok { color: var(--ok); } .item .s.warn { color: var(--warn); }
+  .empty { padding: 14px; color: var(--muted); font-size: .9rem; }
+  #log {
+    font: .8rem/1.5 ui-monospace, Consolas, monospace; color: var(--muted);
+    max-height: 160px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; margin: 0;
+  }
+  label.check { display: flex; gap: 8px; align-items: flex-start; font-size: .92rem; margin-top: 10px; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>Cartella condivisa</h1>
+  <p class="sub">Due persone, due cartelle sul proprio PC, sincronizzate direttamente da browser a browser.</p>
+
+  <div id="unsupported" class="banner hidden"></div>
+
+  <section>
+    <h2><span class="num">1</span> Scegli la tua cartella</h2>
+    <div class="row">
+      <button id="pick" class="primary">Scegli cartella…</button>
+      <span id="folderName" class="hint" style="margin:0">Nessuna cartella selezionata</span>
+    </div>
+    <p class="hint">Meglio una cartella dedicata. Il sito potrà leggere e scrivere solo lì dentro.</p>
+    <label class="check">
+      <input type="checkbox" id="propDel">
+      <span>Elimina qui i file che l'altra persona elimina dalla sua cartella
+        <br><span class="hint">Disattivato: i file eliminati dall'altro restano nella tua cartella.</span></span>
+    </label>
+  </section>
+
+  <section>
+    <h2><span class="num">2</span> Collegati con l'altra persona</h2>
+    <div id="connectUi">
+      <div class="row">
+        <button id="create">Crea una stanza</button>
+        <span class="hint" style="margin:0">oppure</span>
+        <input type="text" id="codeIn" placeholder="codice ricevuto" autocomplete="off" spellcheck="false">
+        <button id="join">Entra</button>
+      </div>
+    </div>
+    <div id="roomUi" class="hidden">
+      <div class="row">
+        <span>Codice stanza:</span> <span id="code" class="code"></span>
+        <button id="copyLink">Copia link</button>
+        <button id="leave">Esci</button>
+      </div>
+      <p class="hint">Manda il codice o il link solo alla persona con cui vuoi condividere: chi lo conosce può collegarsi.</p>
+    </div>
+    <p style="margin:12px 0 0"><span class="status"><span id="dot" class="dot"></span><span id="status">Non collegato</span></span></p>
+  </section>
+
+  <section>
+    <h2><span class="num">3</span> File <span id="count" class="hint" style="margin:0;font-weight:400"></span></h2>
+    <div id="list" class="list"><div class="empty">Scegli una cartella per vedere i file.</div></div>
+  </section>
+
+  <section>
+    <h2>Attività</h2>
+    <pre id="log"></pre>
+  </section>
+</main>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const PREFIX = 'cartella-condivisa-v1-';
+const CHUNK = 64 * 1024;
+const SKIP = new Set(['desktop.ini', 'Thumbs.db', '.DS_Store']);
+
+let dirHandle = null;
+let localIndex = {};          // path -> {s, m}
+let remoteIndex = null;       // path -> {s, m}
+let records = {};             // path -> {l, r}: stato all'ultima sincronizzazione
+let pending = new Map();      // path -> {conflict, got, size}
+let sending = new Set();
+let incoming = new Map();     // id -> trasferimento in arrivo
+let peer = null, conn = null, isHost = false, roomCode = '';
+let lastSent = null, sendId = 0, scanError = false;
+
+/* ---------- utilità ---------- */
+function log(msg) {
+  const t = new Date().toLocaleTimeString('it-IT');
+  const el = $('log');
+  el.textContent = `${t}  ${msg}\n` + el.textContent.slice(0, 6000);
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const eq = (a, b) => !!a && !!b && a.s === b.s && a.m === b.m;
+function fmtSize(n) {
+  if (n < 1024) return n + ' B';
+  if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+  if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB';
+  return (n / 1073741824).toFixed(2) + ' GB';
+}
+function setStatus(text, kind) {
+  $('status').textContent = text;
+  $('dot').className = 'dot' + (kind ? ' ' + kind : '');
+}
+function validPath(p) {
+  if (typeof p !== 'string' || !p || p.length > 1000) return false;
+  return p.split('/').every(seg => seg && seg !== '.' && seg !== '..' && !/[\\:*?"<>|\u0000-\u001f]/.test(seg));
+}
+
+// Tutte le operazioni su indice e file passano da una coda, una alla volta.
+let chain = Promise.resolve();
+function enqueue(fn) {
+  chain = chain.then(fn).catch(e => log('Errore: ' + (e && e.message || e)));
+  return chain;
+}
+let sendChain = Promise.resolve();
+
+/* ---------- file system ---------- */
+async function walk(dir, prefix, out) {
+  for await (const [name, h] of dir.entries()) {
+    if (SKIP.has(name) || name.endsWith('.crswap')) continue;
+    if (h.kind === 'file') {
+      const f = await h.getFile();
+      out[prefix + name] = { s: f.size, m: f.lastModified };
+    } else {
+      await walk(h, prefix + name + '/', out);
+    }
+  }
+}
+async function parentOf(path, create) {
+  const parts = path.split('/');
+  const name = parts.pop();
+  let d = dirHandle;
+  for (const seg of parts) d = await d.getDirectoryHandle(seg, { create });
+  return { dir: d, name };
+}
+async function fileHandle(path, create) {
+  const { dir, name } = await parentOf(path, create);
+  return dir.getFileHandle(name, { create });
+}
+async function removeLocal(path) {
+  const { dir, name } = await parentOf(path, false);
+  await dir.removeEntry(name);
+}
+async function conflictCopy(path) {
+  const fh = await fileHandle(path, false);
+  const f = await fh.getFile();
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}-${pad(d.getMinutes())}-${pad(d.getSeconds())}`;
+  const slash = path.lastIndexOf('/');
+  const base = path.slice(slash + 1), folder = path.slice(0, slash + 1);
+  const dot = base.lastIndexOf('.');
+  const copyName = dot > 0
+    ? `${base.slice(0, dot)} (conflitto ${stamp})${base.slice(dot)}`
+    : `${base} (conflitto ${stamp})`;
+  const out = await fileHandle(folder + copyName, true);
+  const w = await out.createWritable();
+  await w.write(f);
+  await w.close();
+  log(`Conflitto su "${path}": la tua versione è stata salvata come "${copyName}"`);
+}
+
+/* ---------- sincronizzazione ---------- */
+function send(msg) { if (conn && conn.open) conn.send(msg); }
+
+function resetSync() {
+  records = {};
+  pending.clear();
+  for (const t of incoming.values()) t.writable.abort().catch(() => {});
+  incoming.clear();
+  lastSent = null;
+}
+
+async function tick() {
+  if (!dirHandle) return;
+  try {
+    const idx = {};
+    await walk(dirHandle, '', idx);
+    localIndex = idx;
+    if (scanError) { scanError = false; log('Lettura della cartella ripristinata'); }
+  } catch (e) {
+    // Un indice incompleto farebbe sembrare eliminati dei file: meglio saltare il giro.
+    if (!scanError) { scanError = true; log('Non riesco a leggere la cartella: ' + e.message); }
+    render();
+    return;
+  }
+  if (conn && conn.open) {
+    const s = JSON.stringify(localIndex);
+    if (s !== lastSent) { send({ t: 'index', files: localIndex }); lastSent = s; }
+    await reconcile();
+  }
+  render();
+}
+
+function remoteWins(L, R) { return R.m > L.m || (R.m === L.m && !isHost); }
+
+function request(path, conflict) {
+  if (pending.has(path)) return;
+  pending.set(path, { conflict: !!conflict, got: 0, size: (remoteIndex[path] || {}).s || 0 });
+  send({ t: 'get', path });
+}
+
+async function reconcile() {
+  if (!remoteIndex || !dirHandle || scanError) return;
+  const paths = new Set([...Object.keys(localIndex), ...Object.keys(remoteIndex), ...Object.keys(records)]);
+  for (const p of paths) {
+    const L = localIndex[p], R = remoteIndex[p], rec = records[p];
+    if (!L && !R) { delete records[p]; continue; }
+    if (rec) {
+      if (!L) {                       // eliminato qui
+        if (!eq(R, rec.r)) request(p); // l'altro l'ha modificato dopo: lo riprendo
+        continue;
+      }
+      if (!R) {                       // eliminato dall'altro
+        if (eq(L, rec.l)) {
+          if ($('propDel').checked) {
+            try {
+              await removeLocal(p);
+              delete localIndex[p]; delete records[p];
+              log(`Eliminato "${p}" (eliminato dall'altro)`);
+            } catch (e) { log(`Non riesco a eliminare "${p}": ${e.message}`); }
+          }
+        } else {
+          delete records[p];          // modificato qui nel frattempo: lo tengo
+        }
+        continue;
+      }
+      const lc = !eq(L, rec.l), rc = !eq(R, rec.r);
+      if (rc && !lc) request(p);
+      else if (rc && lc && remoteWins(L, R)) request(p, true);
+    } else {
+      if (!L) request(p);
+      else if (R) {
+        if (L.s === R.s) records[p] = { l: L, r: R };   // stessa dimensione: considerati uguali
+        else if (remoteWins(L, R)) request(p, true);
+      }
+    }
+  }
+}
+
+async function drain() {
+  while (conn && conn.open) {
+    const dc = conn.dataChannel;
+    if ((!dc || dc.bufferedAmount < 1048576) && !(conn.bufferSize > 0)) return;
+    await sleep(20);
+  }
+}
+
+async function sendFile(path) {
+  const c = conn;
+  try {
+    if (!validPath(path) || !dirHandle) throw new Error('percorso non valido');
+    const fh = await fileHandle(path, false);
+    const f = await fh.getFile();
+    const id = ++sendId;
+    sending.add(path); render();
+    c.send({ t: 'start', id, path, s: f.size, m: f.lastModified });
+    for (let off = 0; off < f.size; off += CHUNK) {
+      if (!c.open) throw new Error('connessione chiusa');
+      const buf = await f.slice(off, off + CHUNK).arrayBuffer();
+      c.send({ t: 'chunk', id, data: buf });
+      await drain();
+    }
+    c.send({ t: 'end', id });
+    log(`Inviato "${path}" (${fmtSize(f.size)})`);
+  } catch (e) {
+    if (c.open) c.send({ t: 'err', path });
+    log(`Invio di "${path}" non riuscito: ${e.message}`);
+  } finally {
+    sending.delete(path); render();
+  }
+}
+
+async function handle(msg) {
+  if (!msg || typeof msg !== 'object') return;
+  switch (msg.t) {
+    case 'index':
+      if (msg.files && typeof msg.files === 'object') {
+        remoteIndex = {};
+        for (const [p, v] of Object.entries(msg.files)) {
+          if (validPath(p) && v && Number.isFinite(v.s) && Number.isFinite(v.m)) remoteIndex[p] = { s: v.s, m: v.m };
+        }
+        await reconcile(); render();
+      }
+      break;
+    case 'reset':
+      resetSync();
+      break;
+    case 'get':
+      sendChain = sendChain.then(() => sendFile(msg.path));
+      break;
+    case 'start': {
+      const pend = pending.get(msg.path);
+      if (!pend || !validPath(msg.path) || !dirHandle) { send({ t: 'err', path: msg.path }); break; }
+      try {
+        if (pend.conflict && localIndex[msg.path]) await conflictCopy(msg.path);
+        const fh = await fileHandle(msg.path, true);
+        const writable = await fh.createWritable();
+        pend.size = msg.s;
+        incoming.set(msg.id, { path: msg.path, fh, writable, meta: { s: msg.s, m: msg.m }, pend });
+      } catch (e) {
+        pending.delete(msg.path);
+        log(`Non riesco a scrivere "${msg.path}": ${e.message}`);
+      }
+      break;
+    }
+    case 'chunk': {
+      const t = incoming.get(msg.id);
+      if (!t) break;
+      try {
+        await t.writable.write(msg.data);
+        t.pend.got += msg.data.byteLength;
+        renderSoon();
+      } catch (e) {
+        incoming.delete(msg.id); pending.delete(t.path);
+        t.writable.abort().catch(() => {});
+        log(`Scrittura di "${t.path}" interrotta: ${e.message}`);
+      }
+      break;
+    }
+    case 'end': {
+      const t = incoming.get(msg.id);
+      if (!t) break;
+      incoming.delete(msg.id);
+      try {
+        await t.writable.close();
+        const f = await t.fh.getFile();
+        const L = { s: f.size, m: f.lastModified };
+        localIndex[t.path] = L;
+        if (remoteIndex) remoteIndex[t.path] = t.meta;
+        records[t.path] = { l: L, r: t.meta };
+        send({ t: 'ack', path: t.path, l: L, r: t.meta });
+        log(`Ricevuto "${t.path}" (${fmtSize(f.size)})`);
+      } catch (e) {
+        log(`Non riesco a salvare "${t.path}": ${e.message}`);
+      }
+      pending.delete(t.path);
+      render();
+      break;
+    }
+    case 'ack':
+      if (validPath(msg.path) && msg.l && msg.r) {
+        records[msg.path] = { l: { s: msg.r.s, m: msg.r.m }, r: { s: msg.l.s, m: msg.l.m } };
+        if (remoteIndex) remoteIndex[msg.path] = { s: msg.l.s, m: msg.l.m };
+        render();
+      }
+      break;
+    case 'err':
+      pending.delete(msg.path);
+      for (const [id, t] of incoming) if (t.path === msg.path) { incoming.delete(id); t.writable.abort().catch(() => {}); }
+      break;
+    case 'busy':
+      log('La stanza è già occupata da un\'altra persona.');
+      break;
+  }
+}
+
+/* ---------- connessione ---------- */
+function randomCode() {
+  const abc = 'abcdefghjkmnpqrstuvwxyz23456789';
+  const r = crypto.getRandomValues(new Uint8Array(10));
+  return Array.from(r, b => abc[b % abc.length]).join('');
+}
+
+function setupConn(c) {
+  c.on('open', () => {
+    if (conn && conn !== c && conn.open) { c.send({ t: 'busy' }); setTimeout(() => c.close(), 500); return; }
+    conn = c;
+    enqueue(async () => { resetSync(); remoteIndex = null; });
+    setStatus('Collegato: sincronizzazione attiva', 'ok');
+    log('Collegato con l\'altra persona');
+    enqueue(tick);
+  });
+  c.on('data', msg => enqueue(() => handle(msg)));
+  c.on('close', () => {
+    if (conn !== c) return;
+    conn = null;
+    enqueue(async () => { resetSync(); remoteIndex = null; render(); });
+    log('L\'altra persona si è scollegata');
+    if (isHost) setStatus('In attesa dell\'altra persona…', 'warn');
+    else { setStatus('Collegamento perso: riprovo…', 'warn'); setTimeout(joinRoom, 3000); }
+  });
+  c.on('error', e => log('Errore di connessione: ' + e.message));
+}
+
+function showRoom() {
+  $('code').textContent = roomCode;
+  $('connectUi').classList.add('hidden');
+  $('roomUi').classList.remove('hidden');
+}
+
+function startPeer(id) {
+  if (peer) peer.destroy();
+  peer = id ? new Peer(id) : new Peer();
+  peer.on('disconnected', () => { if (peer && !peer.destroyed) peer.reconnect(); });
+  peer.on('error', e => {
+    if (e.type === 'peer-unavailable') {
+      setStatus('Stanza non trovata: l\'altra persona ha la pagina aperta?', 'bad');
+      if (!isHost && roomCode) setTimeout(joinRoom, 5000);
+    } else if (e.type === 'unavailable-id') {
+      setStatus('Codice già in uso, riprova', 'bad'); leave();
+    } else {
+      log('Errore: ' + (e.message || e.type));
+    }
+  });
+  return peer;
+}
+
+function createRoom() {
+  if (typeof Peer === 'undefined') { setStatus('Libreria di collegamento non caricata: controlla la connessione', 'bad'); return; }
+  isHost = true; roomCode = randomCode();
+  setStatus('Creo la stanza…', 'warn');
+  startPeer(PREFIX + roomCode).on('open', () => {
+    showRoom();
+    if (!conn) setStatus('In attesa dell\'altra persona…', 'warn');
+  });
+  peer.on('connection', setupConn);
+}
+
+function joinRoom() {
+  if (!roomCode || isHost || (conn && conn.open)) return;
+  const go = () => setupConn(peer.connect(PREFIX + roomCode, { reliable: true }));
+  if (peer && !peer.destroyed && peer.open) go();
+  else startPeer().on('open', go);
+}
+
+function leave() {
+  roomCode = ''; isHost = false;
+  if (peer) { peer.destroy(); peer = null; }
+  conn = null; remoteIndex = null;
+  enqueue(async () => { resetSync(); render(); });
+  $('connectUi').classList.remove('hidden');
+  $('roomUi').classList.add('hidden');
+  history.replaceState(null, '', location.pathname + location.search);
+  setStatus('Non collegato');
+}
+
+/* ---------- interfaccia ---------- */
+let renderTimer = null;
+function renderSoon() { if (!renderTimer) renderTimer = setTimeout(() => { renderTimer = null; render(); }, 250); }
+
+function render() {
+  const list = $('list');
+  if (!dirHandle) return;
+  const connected = !!(conn && conn.open && remoteIndex);
+  const paths = [...new Set([...Object.keys(localIndex), ...(remoteIndex ? Object.keys(remoteIndex) : [])])].sort((a, b) => a.localeCompare(b, 'it'));
+  $('count').textContent = paths.length ? `· ${paths.length}` : '';
+  list.textContent = '';
+  if (!paths.length) {
+    const e = document.createElement('div'); e.className = 'empty'; e.textContent = 'La cartella è vuota.'; list.append(e); return;
+  }
+  for (const p of paths.slice(0, 500)) {
+    const L = localIndex[p], R = remoteIndex && remoteIndex[p], rec = records[p], pend = pending.get(p);
+    let text, cls = '';
+    if (pend) { text = pend.size ? `in arrivo ${Math.min(100, Math.round(pend.got / pend.size * 100))}%` : 'in arrivo…'; cls = 'warn'; }
+    else if (sending.has(p)) { text = 'in invio…'; cls = 'warn'; }
+    else if (!connected) text = L ? fmtSize(L.s) : '';
+    else if (rec && eq(L, rec.l) && eq(R, rec.r)) { text = 'sincronizzato'; cls = 'ok'; }
+    else if (L && !R) text = rec ? 'eliminato dall\'altro' : 'solo qui';
+    else if (!L && R) text = rec ? 'eliminato qui' : 'solo dall\'altro';
+    else { text = 'da aggiornare'; cls = 'warn'; }
+    const row = document.createElement('div'); row.className = 'item';
+    const a = document.createElement('span'); a.className = 'p'; a.textContent = p;
+    const b = document.createElement('span'); b.className = 's ' + cls; b.textContent = text;
+    row.append(a, b); list.append(row);
+  }
+  if (paths.length > 500) {
+    const e = document.createElement('div'); e.className = 'empty'; e.textContent = `…e altri ${paths.length - 500} file`; list.append(e);
+  }
+}
+
+$('pick').onclick = async () => {
+  try {
+    const h = await window.showDirectoryPicker({ mode: 'readwrite' });
+    enqueue(async () => {
+      dirHandle = h; localIndex = {};
+      resetSync(); send({ t: 'reset' });
+      $('folderName').textContent = 'Cartella: ' + h.name;
+      $('pick').textContent = 'Cambia cartella…';
+      log(`Cartella selezionata: "${h.name}"`);
+      await tick();
+    });
+  } catch (e) {
+    if (e.name !== 'AbortError') log('Selezione cartella non riuscita: ' + e.message);
+  }
+};
+$('create').onclick = createRoom;
+$('join').onclick = () => {
+  const v = $('codeIn').value.trim().toLowerCase().replace(/^.*#/, '');
+  if (!/^[a-z0-9]{6,20}$/.test(v)) { setStatus('Codice non valido', 'bad'); return; }
+  if (typeof Peer === 'undefined') { setStatus('Libreria di collegamento non caricata: controlla la connessione', 'bad'); return; }
+  isHost = false; roomCode = v; showRoom();
+  setStatus('Mi collego…', 'warn'); joinRoom();
+};
+$('leave').onclick = leave;
+$('copyLink').onclick = async () => {
+  const url = location.origin + location.pathname + '#' + roomCode;
+  try { await navigator.clipboard.writeText(url); $('copyLink').textContent = 'Link copiato'; }
+  catch { prompt('Copia questo link:', url); }
+  setTimeout(() => $('copyLink').textContent = 'Copia link', 2000);
+};
+
+// Controlli di compatibilità
+(function () {
+  const box = $('unsupported');
+  let msg = '';
+  if (!('showDirectoryPicker' in window)) msg = 'Questo browser non permette ai siti di accedere a una cartella. Apri la pagina con Chrome, Edge o Brave su computer.';
+  else if (window.self !== window.top) msg = 'La pagina è incorporata in un altro sito e non può accedere alle cartelle. Aprila in una scheda a parte.';
+  if (msg) { box.textContent = msg; box.classList.remove('hidden'); $('pick').disabled = true; }
+  if (location.hash.length > 1) $('codeIn').value = location.hash.slice(1);
+})();
+
+let tickQueued = false;
+setInterval(() => {
+  if (tickQueued || !dirHandle) return;
+  tickQueued = true;
+  enqueue(async () => { try { await tick(); } finally { tickQueued = false; } });
+}, 3000);
+</script>
+</body>
+</html>
